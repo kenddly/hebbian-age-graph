@@ -205,3 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+snake_benchmark.png
+snake_vision_data.npy
+weights
