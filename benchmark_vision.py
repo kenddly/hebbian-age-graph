@@ -3,7 +3,7 @@ import torch
 
 from vision_encoder import VisionEncoder
 from env_vision import SnakeEnv, MAX_STEPS
-from graph import RBFHebbianNetwork
+from graph import AgeingBipartiteGraph
 from plot import plot_results
 from snake_visualizer import watch_agent
 
@@ -85,7 +85,7 @@ def train_agent(age, label, seed_offset=0):
     env = SnakeEnv()
     
     # Updated to 10 inputs to match your latent_dim=10
-    agent = RBFHebbianNetwork(14, 3, age=age)
+    agent = AgeingBipartiteGraph(14, 3, age=age)
 
     results = {
         "label": label,

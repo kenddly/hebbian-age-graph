@@ -1,13 +1,13 @@
 import numpy as np
 
-from env import SnakeEnv, MAX_STEPS, FEATURE_NAMES
+from reversal_env import ReversalEnv, MAX_STEPS, FEATURE_NAMES
 from graph import AgeingBipartiteGraph
 from plot import plot_results
 from snake_visualizer import watch_agent
 
 
 SEED = 42
-N_EPISODES = 2000
+N_EPISODES = 4000
 EVAL_EVERY = 50
 EVAL_EPS = 20
 
@@ -37,7 +37,7 @@ def run_episode(agent, env, train=True):
 
 
 def evaluate(agent):
-    env = SnakeEnv()
+    env = ReversalEnv()
     rs, ls, fs = [], [], []
 
     for _ in range(EVAL_EPS):
@@ -52,8 +52,8 @@ def evaluate(agent):
 def train_agent(age, label, seed_offset=0):
     np.random.seed(SEED + seed_offset)
 
-    env = SnakeEnv()
-    agent = AgeingBipartiteGraph(8, 3, age=age, trace_decay=0.828, base_lr=0.019, crystallization_threshold=0.7968, rigidity=0.235, baseline_lr=0.0464)
+    env = ReversalEnv()
+    agent = AgeingBipartiteGraph(8, 3, age=age)
 
     results = {
         "label": label,
@@ -63,8 +63,7 @@ def train_agent(age, label, seed_offset=0):
         "eval_lengths": [],
         "eval_foods": [],
         "ep_rewards": [],
-        "agent": agent,
-        "best_weights": None
+        "agent": agent
     }
 
     for ep in range(1, N_EPISODES + 1):
@@ -80,17 +79,15 @@ def train_agent(age, label, seed_offset=0):
             results["eval_foods"].append(ef)
 
             print(f"{label} | ep {ep} | reward={er:.2f} food={ef:.2f}")
-            if results["best_weights"] is None or er > max(results["eval_rewards"][:-1]):
-                results["best_weights"] = agent.weights.copy()
 
     return results
 
 
 def main():
     configs = [
-        (16.63, "Young", 21315124),
-        (10, "Middle", 1),
-        (40, "Old", 2),
+        # (2, "Young", 0),
+        (5, "Middle", 1),
+        # (8, "Old", 2),
     ]
 
     results = [train_agent(*cfg) for cfg in configs]
@@ -98,11 +95,8 @@ def main():
     plot_results(results, FEATURE_NAMES)
 
     # watch the brains play
-    result = results[0]
-    env = SnakeEnv()
-    env.seed(SEED)
-    result["agent"].weights = result["best_weights"]
-    watch_agent(result["agent"], env, cell_size=100)
+    env = ReversalEnv()
+    watch_agent(results[0]["agent"], env, cell_size=100)
 
 
 if __name__ == "__main__":

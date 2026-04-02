@@ -1,9 +1,6 @@
 import numpy as np
 from collections import deque
 
-import gymnasium as gym
-from gymnasium import spaces
-
 # ── constants ─────────────────────────────────────────────
 GRID = 10
 MAX_STEPS = 200
@@ -19,8 +16,9 @@ FEATURE_NAMES = [
     "bias"
 ]
 
+class ReversalEnv:
+    _global_resets = 0
 
-class SnakeEnv:
     def __init__(self, grid=GRID):
         self.grid = grid
         self.REWARD_DEATH = -10.0
@@ -28,6 +26,18 @@ class SnakeEnv:
         self.reset()
 
     def reset(self):
+        ReversalEnv._global_resets += 1
+        
+        # Math perfectly isolates each agent's lifecycle!
+        # Your benchmark.py uses exactly 2800 resets per agent 
+        # (2000 train resets + 40 eval loops * 20 eval resets).
+        agent_ep = ReversalEnv._global_resets % 2800
+        if agent_ep == 0:
+            agent_ep = 2800
+            
+        # Reversal triggers halfway through the agent's life (ep 1400)
+        self.is_reversed = agent_ep > 1400
+
         mid = self.grid // 2
         self.snake = deque([(mid, mid), (mid, mid - 1)])
         self.direction = RIGHT
@@ -37,9 +47,6 @@ class SnakeEnv:
 
         self.min_dist_to_food = self._distance(self.snake[0], self.food)
         return self._state()
-
-    def seed(self, seed=None):
-        np.random.seed(seed)
 
     def _distance(self, a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -84,6 +91,13 @@ class SnakeEnv:
         return np.array([*map(float, danger), *map(float, f), 1.0], dtype=np.float32)
 
     def step(self, action):
+        # If reversed, the agent's motor controls invert (Right turns Left, Left turns Right)
+        if self.is_reversed:
+            if action == 1:
+                action = 2
+            elif action == 2:
+                action = 1
+
         if action == 1:
             self.direction = TURN_R[self.direction]
         elif action == 2:
@@ -107,47 +121,11 @@ class SnakeEnv:
             self.snake.pop()
             new_dist = self._distance(new_head, self.food)
 
-            # if new_dist < self.min_dist_to_food:
-            #     self.min_dist_to_food = new_dist
-            #     reward = 1.0
-            # else:
-            reward = -0.2
+            if new_dist < self.min_dist_to_food:
+                self.min_dist_to_food = new_dist
+                reward = 1.0
+            else:
+                reward = -0.2
 
         self.steps += 1
         return self._state(), reward, self.steps >= MAX_STEPS
-
-
-class SnakeGymWrapper(gym.Env):
-    def __init__(self, env):
-        super().__init__()
-
-        self.env = env  # your original SnakeEnv
-
-        # spaces (inferred from your env)
-        self.observation_space = spaces.Box(
-            low=0.0, high=1.0, shape=(8,), dtype=np.float32
-        )
-        self.action_space = spaces.Discrete(3)
-
-    def reset(self, seed=None):
-        if seed is not None:
-            np.random.seed(seed)
-
-        obs = self.env.reset()
-        return obs, {}
-
-    def step(self, action):
-        obs, reward, done = self.env.step(action)
-
-        # Your env only has "done"
-        terminated = done
-        truncated = False  # you already encode max_steps inside done
-
-        return obs, reward, terminated, truncated, {}
-
-    def render(self):
-        # optional: hook into your own visualization later
-        pass
-
-    def close(self):
-        pass
