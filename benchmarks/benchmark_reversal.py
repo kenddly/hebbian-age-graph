@@ -1,13 +1,12 @@
 import numpy as np
-
-from reversal_env import ReversalEnv, MAX_STEPS, FEATURE_NAMES
-from graph import AgeingBipartiteGraph
+from environments.env_reversal import ReversalEnv as SnakeEnv
+from environments.env import MAX_STEPS, FEATURE_NAMES
+from models.graph import BipartiteGraph
 from plot import plot_results
 from snake_visualizer import watch_agent
 
-
-SEED = 42
-N_EPISODES = 4000
+N_EPISODES = 10000
+REVERSAL_POINT = 2000
 EVAL_EVERY = 50
 EVAL_EPS = 20
 
@@ -21,6 +20,8 @@ def run_episode(agent, env, train=True):
         state, reward, done = env.step(action)
 
         if train:
+            if reward < 0:
+                reward *= 0.1
             agent.apply_reward(reward)
 
         total_r += reward
@@ -30,14 +31,14 @@ def run_episode(agent, env, train=True):
         if done:
             break
 
-    if train:
-        agent.reset_traces()
-
     return total_r, env.steps, food
 
 
-def evaluate(agent):
-    env = ReversalEnv()
+def evaluate(agent, seed=None, reverse=True):
+    env = SnakeEnv()
+    env.seed(seed)
+    env.reverse_controls(reverse)
+
     rs, ls, fs = [], [], []
 
     for _ in range(EVAL_EPS):
@@ -49,11 +50,10 @@ def evaluate(agent):
     return np.mean(rs), np.mean(ls), np.mean(fs)
 
 
-def train_agent(age, label, seed_offset=0):
-    np.random.seed(SEED + seed_offset)
-
-    env = ReversalEnv()
-    agent = AgeingBipartiteGraph(8, 3, age=age)
+def train_agent(age, label, seed):
+    env = SnakeEnv()
+    env.seed(seed)
+    agent = BipartiteGraph(8, 3, age=age)
 
     results = {
         "label": label,
@@ -63,7 +63,8 @@ def train_agent(age, label, seed_offset=0):
         "eval_lengths": [],
         "eval_foods": [],
         "ep_rewards": [],
-        "agent": agent
+        "agent": agent,
+        "best_weights": None
     }
 
     for ep in range(1, N_EPISODES + 1):
@@ -71,7 +72,7 @@ def train_agent(age, label, seed_offset=0):
         results["ep_rewards"].append(r)
 
         if ep % EVAL_EVERY == 0:
-            er, el, ef = evaluate(agent)
+            er, el, ef = evaluate(agent, reverse=(ep > (REVERSAL_POINT)))
 
             results["eval_x"].append(ep)
             results["eval_rewards"].append(er)
@@ -79,24 +80,34 @@ def train_agent(age, label, seed_offset=0):
             results["eval_foods"].append(ef)
 
             print(f"{label} | ep {ep} | reward={er:.2f} food={ef:.2f}")
+        
+            if (ep > REVERSAL_POINT) and (results["best_weights"] is None or er > max(results["eval_rewards"][:-1])):
+                results["best_weights"] = agent.get_weights()
+
+        if ep >= REVERSAL_POINT and env.is_reversed == False:
+            env.reverse_controls(True)
 
     return results
 
 
 def main():
     configs = [
-        # (2, "Young", 0),
-        (5, "Middle", 1),
-        # (8, "Old", 2),
+        (0, "Young", 0),
+        (15, "Middle", 0),
+        (30, "Old", 0),
     ]
 
     results = [train_agent(*cfg) for cfg in configs]
 
-    plot_results(results, FEATURE_NAMES)
+    plot_results(results, FEATURE_NAMES, out_path="outputs/plots/snake_benchmark.png")
 
     # watch the brains play
-    env = ReversalEnv()
-    watch_agent(results[0]["agent"], env, cell_size=100)
+    result = results[0]
+    env = SnakeEnv(max_steps=1000)
+    env.reverse_controls()
+    env.seed(42)
+    result["agent"].set_weights(result["best_weights"])
+    watch_agent(result["agent"], env, cell_size=100)
 
 
 if __name__ == "__main__":

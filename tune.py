@@ -2,7 +2,7 @@ import optuna
 import numpy as np
 
 # Import your existing environment and graph
-from env import SnakeEnv, MAX_STEPS
+from environments.env import SnakeEnv, MAX_STEPS
 from graph import AgeingBipartiteGraph
 
 # ─── TRAINING & EVALUATION UTILITIES ────────────────────────────────────────

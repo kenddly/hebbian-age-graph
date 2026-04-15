@@ -1,12 +1,9 @@
 import numpy as np
-
-from env import SnakeEnv, MAX_STEPS, FEATURE_NAMES
-from graph import AgeingBipartiteGraph
+from environments.env import SnakeEnv, MAX_STEPS, FEATURE_NAMES
+from models.graph import BipartiteGraph
 from plot import plot_results
 from snake_visualizer import watch_agent
 
-
-SEED = 42
 N_EPISODES = 2000
 EVAL_EVERY = 50
 EVAL_EPS = 20
@@ -21,6 +18,8 @@ def run_episode(agent, env, train=True):
         state, reward, done = env.step(action)
 
         if train:
+            if reward < 0:
+                reward *= 0.1
             agent.apply_reward(reward)
 
         total_r += reward
@@ -30,14 +29,13 @@ def run_episode(agent, env, train=True):
         if done:
             break
 
-    if train:
-        agent.reset_traces()
-
     return total_r, env.steps, food
 
 
-def evaluate(agent):
+def evaluate(agent, seed=None):
     env = SnakeEnv()
+    env.seed(seed)
+
     rs, ls, fs = [], [], []
 
     for _ in range(EVAL_EPS):
@@ -49,11 +47,10 @@ def evaluate(agent):
     return np.mean(rs), np.mean(ls), np.mean(fs)
 
 
-def train_agent(age, label, seed_offset=0):
-    np.random.seed(SEED + seed_offset)
-
+def train_agent(age, label, seed):
     env = SnakeEnv()
-    agent = AgeingBipartiteGraph(8, 3, age=age, trace_decay=0.828, base_lr=0.019, crystallization_threshold=0.7968, rigidity=0.235, baseline_lr=0.0464)
+    env.seed(seed)
+    agent = BipartiteGraph(8, 3, age=age)
 
     results = {
         "label": label,
@@ -81,27 +78,27 @@ def train_agent(age, label, seed_offset=0):
 
             print(f"{label} | ep {ep} | reward={er:.2f} food={ef:.2f}")
             if results["best_weights"] is None or er > max(results["eval_rewards"][:-1]):
-                results["best_weights"] = agent.weights.copy()
+                results["best_weights"] = agent.get_weights()
 
     return results
 
 
 def main():
     configs = [
-        (16.63, "Young", 21315124),
-        (10, "Middle", 1),
-        (40, "Old", 2),
+        (0, "Young", 0),
+        (15, "Middle", 0),
+        (30, "Old", 0),
     ]
 
     results = [train_agent(*cfg) for cfg in configs]
 
-    plot_results(results, FEATURE_NAMES)
+    plot_results(results, FEATURE_NAMES, out_path="outputs/plots/snake_benchmark.png")
 
     # watch the brains play
     result = results[0]
-    env = SnakeEnv()
-    env.seed(SEED)
-    result["agent"].weights = result["best_weights"]
+    env = SnakeEnv(max_steps=1000)
+    env.seed(42)
+    result["agent"].set_weights(result["best_weights"])
     watch_agent(result["agent"], env, cell_size=100)
 
 

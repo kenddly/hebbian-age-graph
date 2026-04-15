@@ -6,10 +6,14 @@ from benchmarks.benchmark import run_episode, evaluate, N_EPISODES
 
 def run_age_experiment(ages, seed=42):
     results = []
+    if seed is not None:
+        np.random.seed(seed)
+    else:
+        np.random.seed()
     
     for age in ages:
+        np.random.seed()
         env = SnakeEnv()
-        env.seed(seed)
 
         agent = BipartiteGraph(
             8, 3, age=age, 
@@ -41,7 +45,7 @@ def run_age_experiment(ages, seed=42):
 def plot_age_results(results, fp="age_impact.png"):
     ages = [r["age"] for r in results]
     
-    fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
     
     # 1. Performance (Reward)
@@ -85,20 +89,20 @@ def plot_age_results(results, fp="age_impact.png"):
     ax_twin2.plot(ages, lr_scale, color='orange', linestyle=':')
     ax_twin2.set_ylabel("Effective LR Scale", color='orange')
     
-    # # 4. Temperature and Baseline
-    # ax = axes[3]
-    # temps = [r["temperature"] for r in results]
-    # baselines = [r["reward_baseline"] for r in results]
+    # 4. Temperature and Baseline
+    ax = axes[3]
+    temps = [r["temperature"] for r in results]
+    baselines = [r["reward_baseline"] for r in results]
     
-    # ax.plot(ages, temps, marker='v', color='tab:cyan', label="Temperature")
-    # ax.set_title("Actor Stats vs. Age")
-    # ax.set_xlabel("Age")
-    # ax.set_ylabel("Temperature Softmax")
-    #
-    # ax_twin3 = ax.twinx()
-    # ax_twin3.plot(ages, baselines, marker='p', color='black', alpha=0.6, label="Reward Baseline")
-    # ax_twin3.set_ylabel("Advantage Baseline")
-    #
+    ax.plot(ages, temps, marker='v', color='tab:cyan', label="Temperature")
+    ax.set_title("Actor Stats vs. Age")
+    ax.set_xlabel("Age")
+    ax.set_ylabel("Temperature Softmax")
+    
+    ax_twin3 = ax.twinx()
+    ax_twin3.plot(ages, baselines, marker='p', color='black', alpha=0.6, label="Reward Baseline")
+    ax_twin3.set_ylabel("Advantage Baseline")
+    
     plt.tight_layout()
     plt.savefig(fp, dpi=150)
     plt.close()
@@ -106,5 +110,5 @@ def plot_age_results(results, fp="age_impact.png"):
 
 if __name__ == "__main__":
     ages_to_test = np.linspace(0, 60, 16)
-    results = run_age_experiment(ages_to_test, seed=43151)
-    plot_age_results(results, fp="outputs/plots/age_impact.png")
+    results = run_age_experiment(ages_to_test, seed=42)
+    plot_age_results(results, fp="outputs/plots/age_impact_reversal.png")

@@ -1,12 +1,10 @@
 import numpy as np
 from collections import deque
 
-import gymnasium as gym
-from gymnasium import spaces
-
 # ── constants ─────────────────────────────────────────────
 GRID = 10
 MAX_STEPS = 200
+SEED = 42
 
 UP, DOWN, LEFT, RIGHT = 0, 1, 2, 3
 DELTAS = {UP: (-1, 0), DOWN: (1, 0), LEFT: (0, -1), RIGHT: (0, 1)}
@@ -21,11 +19,16 @@ FEATURE_NAMES = [
 
 
 class SnakeEnv:
-    def __init__(self, grid=GRID):
+    def __init__(self, grid=GRID, max_steps=MAX_STEPS, seed=SEED):
         self.grid = grid
+        self.max_steps = max_steps
         self.REWARD_DEATH = -10.0
         self.REWARD_FOOD = 10.0
+        self.generator = np.random.default_rng(seed)
         self.reset()
+
+    def seed(self, seed=None):
+        self.generator = np.random.default_rng(seed)
 
     def reset(self):
         mid = self.grid // 2
@@ -38,16 +41,13 @@ class SnakeEnv:
         self.min_dist_to_food = self._distance(self.snake[0], self.food)
         return self._state()
 
-    def seed(self, seed=None):
-        np.random.seed(seed)
-
     def _distance(self, a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     def _place_food(self):
         cells = [(r, c) for r in range(self.grid) for c in range(self.grid)
                  if (r, c) not in self.snake]
-        return cells[np.random.randint(len(cells))]
+        return cells[self.generator.integers(len(cells))]
 
     def _state(self):
         head = self.snake[0]
@@ -99,55 +99,20 @@ class SnakeEnv:
 
         self.snake.appendleft(new_head)
 
+        reward = 0.0
         if new_head == self.food:
             reward = self.REWARD_FOOD
             self.food = self._place_food()
             self.min_dist_to_food = self._distance(new_head, self.food)
         else:
             self.snake.pop()
-            new_dist = self._distance(new_head, self.food)
 
+            # new_dist = self._distance(new_head, self.food)
             # if new_dist < self.min_dist_to_food:
             #     self.min_dist_to_food = new_dist
             #     reward = 1.0
             # else:
-            reward = -0.2
+            #     reward = -0.2
 
         self.steps += 1
-        return self._state(), reward, self.steps >= MAX_STEPS
-
-
-class SnakeGymWrapper(gym.Env):
-    def __init__(self, env):
-        super().__init__()
-
-        self.env = env  # your original SnakeEnv
-
-        # spaces (inferred from your env)
-        self.observation_space = spaces.Box(
-            low=0.0, high=1.0, shape=(8,), dtype=np.float32
-        )
-        self.action_space = spaces.Discrete(3)
-
-    def reset(self, seed=None):
-        if seed is not None:
-            np.random.seed(seed)
-
-        obs = self.env.reset()
-        return obs, {}
-
-    def step(self, action):
-        obs, reward, done = self.env.step(action)
-
-        # Your env only has "done"
-        terminated = done
-        truncated = False  # you already encode max_steps inside done
-
-        return obs, reward, terminated, truncated, {}
-
-    def render(self):
-        # optional: hook into your own visualization later
-        pass
-
-    def close(self):
-        pass
+        return self._state(), reward, self.steps >= self.max_steps
