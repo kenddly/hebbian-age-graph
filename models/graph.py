@@ -54,18 +54,23 @@ class BipartiteGraph:
         advantage = reward - self.reward_baseline
         # Asymmetric tracking: catch upward spikes fast, decay slowly on bad runs
         self.reward_baseline += 0.01 * advantage
+        self.reward_baseline = np.clip(self.reward_baseline, -1.0, 1.0) 
 
         dopamine = np.tanh(self.da_scale * advantage)
 
+        # Normalize traces to prevent instability
         col_norms = np.linalg.norm(self.traces, axis=0, keepdims=True) + 1e-8
         normalized_traces = self.traces / col_norms
 
         delta = self.lr * dopamine * normalized_traces
 
+        # If dopamine is negative, apply rigidity to crystallized weights
         if dopamine < 0:
             delta = np.where(self.crystallization, delta * self.rigidity, delta)
 
         self.weights = np.clip(self.weights + delta, -5.0, 5.0)
+
+        # Update crystallization status
         self.crystallization = np.abs(self.weights) > self.crystallization_threshold
 
 

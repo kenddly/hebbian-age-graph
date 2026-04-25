@@ -1,19 +1,22 @@
 import numpy as np
 import os
 import matplotlib
+
+from benchmarks.benchmark_reversal import REVERSAL_POINT
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.patches as patches
 
-from environments.env import SnakeEnv, MAX_STEPS, FEATURE_NAMES
+from environments.env_reversal import ReversalEnv as SnakeEnv
+from environments.env import FEATURE_NAMES, MAX_STEPS
 from models.graph import BipartiteGraph
-from snake_visualizer import watch_agent
 
-N_EPISODES = 3000
+N_EPISODES = 6000
 EVAL_EVERY = 50
 EVAL_EPS = 20
-SWITCH_EPISODE = 1000
+SWITCH_EPISODE = 2000
+REVERSAL_EPISODE = 4000
 
 def run_episode(agent, env, train=True):
     state = env.reset()
@@ -71,6 +74,10 @@ def train_baseline_agent(age, label, seed):
     for ep in range(1, N_EPISODES + 1):
         r, _, _ = run_episode(agent, env, train=True)
         results["ep_rewards"].append(r)
+        
+        if ep == REVERSAL_EPISODE:
+            print(f"\n  >>> EPISODE {ep}: CONTROL REVERSAL TRIGGERED! <<<")
+            env.reverse_controls(reverse=True)
 
         if ep % EVAL_EVERY == 0:
             er, el, ef = evaluate(agent)
@@ -85,7 +92,7 @@ def train_baseline_agent(age, label, seed):
             print(f"  {label} | ep {ep:>4} | reward={er:>6.2f} food={ef:>4.2f} | cryst={cryst}")
             if results["best_weights"] is None or er > max(results["eval_rewards"][:-1], default=-float('inf')):
                 results["best_weights"] = agent.get_weights().copy()
-
+            
     return results
 
 
@@ -104,9 +111,13 @@ def train_transfer_agent(age_start, age_transfer, label, seed):
     }
 
     for ep in range(1, N_EPISODES + 1):
+        if ep == REVERSAL_EPISODE:
+            print(f"\n  >>> EPISODE {ep}: CONTROL REVERSAL TRIGGERED! <<<")
+            env.reverse_controls(reverse=True)
+
         if ep == SWITCH_EPISODE + 1:
             print(f"\n  >>> EPISODE {ep}: AGEING TRIGGERED! Transferring weights to Age {age_transfer} <<<")
-            new_agent = BipartiteGraph(8, 3, age=age_transfer)
+            new_agent = BipartiteGraph(8, 3, age=age_transfer, seed=seed)
             
             new_agent.set_weights(agent.get_weights().copy())
             new_agent.crystallization = agent.crystallization.copy()
@@ -130,12 +141,12 @@ def train_transfer_agent(age_start, age_transfer, label, seed):
             print(f"  {label} | ep {ep:>4} | reward={er:>6.2f} food={ef:>4.2f} | cryst={cryst}")
             if results["best_weights"] is None or er > max(results["eval_rewards"][:-1], default=-float('inf')):
                 results["best_weights"] = agent.get_weights().copy()
-
+        
     results["agent"] = agent
     return results
 
 
-def plot_dynamic_results(results, switch_ep=None, out_path="outputs/plots/transfer_benchmark.png"):
+def plot_dynamic_results(results, switch_ep=None, reverse_ep=None, out_path="outputs/plots/transfer_benchmark.png"):
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     
     fig = plt.figure(figsize=(24, 20))
@@ -199,6 +210,8 @@ def plot_dynamic_results(results, switch_ep=None, out_path="outputs/plots/transf
         ax.set_title(title, fontweight='bold')
         if switch_ep:
             ax.axvline(x=switch_ep, color='black', linestyle='--', alpha=0.5, label='Age Transfer')
+        if reverse_ep:
+            ax.axvline(x=reverse_ep, color='purple', linestyle='--', alpha=0.5, label='Control Reversal')
         ax.legend(fontsize=9)
 
     fig.suptitle("Ageing Transfer Benchmark: Prior Knowledge Integration", fontsize=16, fontweight='bold', y=0.95)
@@ -208,14 +221,16 @@ def plot_dynamic_results(results, switch_ep=None, out_path="outputs/plots/transf
 
 
 def main(SEED):
+    YOUNG_AGE = 10
+    OLD_AGE = 30
 
     results =[
-        train_baseline_agent(age=10, label="Middle (From Scratch)", seed=SEED),
-        train_baseline_agent(age=20, label="Old (From Scratch)", seed=SEED),
-        train_transfer_agent(age_start=10, age_transfer=20, label="Transfer: Middle -> Old", seed=SEED)
+        train_baseline_agent(age=YOUNG_AGE, label="Middle (From Scratch)", seed=SEED),
+        train_baseline_agent(age=OLD_AGE, label="Old (From Scratch)", seed=SEED),
+        train_transfer_agent(age_start=YOUNG_AGE, age_transfer=OLD_AGE, label="Transfer: Middle -> Old", seed=SEED)
     ]
 
-    plot_dynamic_results(results, switch_ep=SWITCH_EPISODE, out_path=f"outputs/plots/transfer_benchmark_{SEED}.png")
+    plot_dynamic_results(results, switch_ep=SWITCH_EPISODE, reverse_ep=REVERSAL_EPISODE, out_path=f"outputs/plots/transfer_benchmark_{SEED}.png")
 
     best_agent = results[2]["agent"]
     test_env = SnakeEnv(max_steps=1000)
@@ -226,5 +241,5 @@ def main(SEED):
     # watch_agent(best_agent, test_env, cell_size=100)
 
 if __name__ == "__main__":
-    for i in range(42, 62):
+    for i in range(42, 45):
         main(i)
